@@ -55,8 +55,8 @@ typedef struct {
 } sht_sensor;
 
 #define GATTS_SERVICE_UUID   0x181A
-#define GATTS_CHAR_UUID      0x2A1C
-#define GATTS_NUM_HANDLE     1
+#define GATTS_CHAR_UUID      0xFF01
+#define GATTS_NUM_HANDLE     4
 
 #define SENSOR_ADDRESS          0x44
 #define SENSOR_BUS_COMM_SPEED   400000
@@ -77,11 +77,16 @@ static sht_sensor sht40 = {
 
 static esp_gatt_char_prop_t a_property = 0;
 
+static sensor_data default_sensor_data = {
+    .humidity = 0.0f,
+    .temperature = 0.0f,
+};
+
 static esp_attr_value_t gatts_demo_char1_val =
 {
     .attr_max_len = sizeof(sensor_data),
     .attr_len     = sizeof(sensor_data),
-    .attr_value   = 0,
+    .attr_value   = (uint8_t*)&default_sensor_data,
 };
 
 static uint8_t adv_config_done = 0;
@@ -112,7 +117,7 @@ void sht_configure() {
 
 void sht_get_data(sensor_data *meas) {
 
-    uint8_t command[1] = {0xF6};
+    uint8_t command[1] = {SHT40_MEDIUM_ACCURACY_MEASURMENT_COMMAND};
     uint8_t rcv_buff[6] = {0};
 
     //ESP_ERROR_CHECK(i2c_master_transmit_receive(sht40.dev_handle, command, sizeof(command), rcv_buff, sizeof(rcv_buff), -1));
@@ -368,11 +373,10 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
         esp_ble_conn_update_params_t conn_params = {0};
         memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
         conn_params.latency = 0;
-        conn_params.max_int = 0xA0;    // max_int = 0xA0*1.25ms = 120ms
-        conn_params.min_int = 0x80;    // min_int = 0x80*1.25ms = 100ms
+        conn_params.max_int = 0xA0;    // max_int = 0xA0*1.25ms = 200ms
+        conn_params.min_int = 0x80;    // min_int = 0x80*1.25ms = 160ms
         conn_params.timeout = 200;    // timeout = 200*10ms = 2000ms
-        ESP_LOGI(GATTS_TAG, "Connected, conn_id %u, remote "ESP_BD_ADDR_STR"",
-                 param->connect.conn_id, ESP_BD_ADDR_HEX(param->connect.remote_bda));
+        ESP_LOGI(GATTS_TAG, "Connected, conn_id %u, remote "ESP_BD_ADDR_STR"", param->connect.conn_id, ESP_BD_ADDR_HEX(param->connect.remote_bda));
         gl_profile_tab[PROFILE_A_APP_ID].conn_id = param->connect.conn_id;
         //start sent the update connection parameters to the peer device.
         esp_ble_gap_update_conn_params(&conn_params);
@@ -416,19 +420,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
         }
     }
 
-    /* If the gatts_if equal to profile A, call profile A cb handler,
-     * so here call each profile's callback */
-    do {
-        int idx;
-        for (idx = 0; idx < PROFILE_NUM; idx++) {
-            if (gatts_if == ESP_GATT_IF_NONE || /* ESP_GATT_IF_NONE, not specify a certain gatt_if, need to call every profile cb function */
-                    gatts_if == gl_profile_tab[idx].gatts_if) {
-                if (gl_profile_tab[idx].gatts_cb) {
-                    gl_profile_tab[idx].gatts_cb(event, gatts_if, param);
-                }
-            }
-        }
-    } while (0);
+    gl_profile_tab[PROFILE_A_APP_ID].gatts_cb(event, gatts_if, param);
 }
 
 void app_main(void)
@@ -444,11 +436,7 @@ void app_main(void)
     ESP_ERROR_CHECK( ret );
 
     sht_configure();
-    // while(1) {
-    //     sensor_data* measurement = sht_get_data();
-    //     printf("Temperature: %.2f\nHumidity: %.2f\n\n", measurement->temperature, measurement->humidity);
-    //     vTaskDelay(2000 / portTICK_PERIOD_MS);
-    // }
+
 
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
 
