@@ -408,12 +408,8 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
-# Example 'GATT SERVER' Config
+# VeloClimat esp32 firmware Config
 #
-# CONFIG_EXAMPLE_SET_RAW_ADV_DATA is not set
-CONFIG_EXAMPLE_CI_ID=70
-CONFIG_EXAMPLE_CI_PIPELINE_ID=0
-# end of Example 'GATT SERVER' Config
 
 #
 # Compiler options
