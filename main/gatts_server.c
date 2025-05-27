@@ -1,19 +1,3 @@
-/*
- * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: Unlicense OR CC0-1.0
- */
-
-/****************************************************************************
-*
-* This demo showcases BLE GATT server. It can send adv data, be connected by client.
-* Run the gatt_client demo, the client demo will automatically connect to the gatt_server demo.
-* Client demo will enable gatt_server's notify after connection. The two devices will then exchange
-* data.
-*
-****************************************************************************/
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -438,7 +422,8 @@ void app_main(void)
     // esp_wifi_stop();
     sht_configure();
 
-    ////// Code test du capteur /////////
+//////////////// Sensor test code ////////////////////
+
 
     // double tcount = 0.0f;
     // sensor_data sd = {0};
@@ -450,7 +435,7 @@ void app_main(void)
     //     tcount += 1.5;
     // }
 
-    /////////////////////////////////////
+//////////////////////////////////////////////////////
     
 
 
