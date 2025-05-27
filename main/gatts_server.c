@@ -435,7 +435,23 @@ void app_main(void)
     }
     ESP_ERROR_CHECK( ret );
 
+    // esp_wifi_stop();
     sht_configure();
+
+    ////// Code test du capteur /////////
+
+    // double tcount = 0.0f;
+    // sensor_data sd = {0};
+    // while (1)
+    // {
+    //     sht_get_data(&sd);
+    //     printf("time: %fs\ntemp: %.2f°C\nHum: %.2f%%\n\n", tcount, sd.temperature, sd.humidity);
+    //     vTaskDelay(1500/portTICK_PERIOD_MS);
+    //     tcount += 1.5;
+    // }
+
+    /////////////////////////////////////
+    
 
 
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
