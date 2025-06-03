@@ -50,7 +50,7 @@ typedef struct {
 #define SHT40_LOW_ACCURACY_MEASURMENT_COMMAND       0xE0    //  ~0.1°C   1.3-1.7ms
 
 
-static char test_device_name[ESP_BLE_ADV_NAME_LEN_MAX] = "ESP_VC_TEMP";
+static char test_device_name[ESP_BLE_ADV_NAME_LEN_MAX] = "CHANGE_ME";
 
 
 static sht_sensor sht40 = {
@@ -82,8 +82,8 @@ void sht_configure() {
     i2c_master_bus_config_t i2c_mst_config = {
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .i2c_port = 0,
-        .scl_io_num = GPIO_NUM_22,
-        .sda_io_num = GPIO_NUM_21,
+        .scl_io_num = GPIO_NUM_9,
+        .sda_io_num = GPIO_NUM_8,
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
     };
@@ -418,6 +418,11 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK( ret );
+
+    // Gets mac address and uses the 3 last bytes to get a sort of unique identifier
+    unsigned char mac_base[6] = {0};
+    esp_efuse_mac_get_default(mac_base);
+    sprintf(test_device_name, "ESP_VC_TEMP_%X%X%X", mac_base[3], mac_base[4], mac_base[5]);
 
     // esp_wifi_stop();
     sht_configure();
