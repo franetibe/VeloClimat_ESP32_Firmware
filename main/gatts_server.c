@@ -22,7 +22,7 @@
 
 #include "sdkconfig.h"
 
-#define GATTS_TAG "ESP_VC_TEMP"
+#define GATTS_TAG "VC_SENSOR"
 
 ///Declare the static function
 static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param);
@@ -38,6 +38,10 @@ typedef struct {
     sensor_data latest_data;
 } sht_sensor;
 
+#define GPIO_SDA_PIN    GPIO_NUM_8
+#define GPIO_SCL_PIN    GPIO_NUM_9
+#define I2C_TIMEOUT     150
+
 #define GATTS_SERVICE_UUID   0x181A
 #define GATTS_CHAR_UUID      0xFF01
 #define GATTS_NUM_HANDLE     4
@@ -50,7 +54,7 @@ typedef struct {
 #define SHT40_LOW_ACCURACY_MEASURMENT_COMMAND       0xE0    //  ~0.1°C   1.3-1.7ms
 
 
-static char test_device_name[ESP_BLE_ADV_NAME_LEN_MAX] = "CHANGE_ME";
+static char device_name[ESP_BLE_ADV_NAME_LEN_MAX] = "CHANGE_ME";
 
 
 static sht_sensor sht40 = {
@@ -59,14 +63,14 @@ static sht_sensor sht40 = {
     .latest_data = {0},
 };
 
-static esp_gatt_char_prop_t a_property = 0;
+static esp_gatt_char_prop_t sensor_char_properties = 0;
 
-static sensor_data default_sensor_data = {
+static const sensor_data default_sensor_data = {
     .humidity = 0.0f,
     .temperature = 0.0f,
 };
 
-static esp_attr_value_t gatts_demo_char1_val =
+static esp_attr_value_t gatts_char1_default =
 {
     .attr_max_len = sizeof(sensor_data),
     .attr_len     = sizeof(sensor_data),
@@ -78,25 +82,50 @@ static uint8_t adv_config_done = 0;
 #define scan_rsp_config_flag (1 << 1)
 
 
+uint8_t sht_crc8(const uint8_t *data, int len) {
+    uint8_t crc = 0xFF; // Initial value
+    uint8_t polynomial = 0x31; // CRC-8 polynomial 
+
+    for (int i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++) {
+            if ((crc & 0x80) != 0) {
+                crc = (uint8_t)((crc << 1) ^ polynomial);
+            } else {
+                crc <<= 1;
+            }
+        }
+    }
+    return crc;
+}
+
 void sht_configure() {
-    i2c_master_bus_config_t i2c_mst_config = {
+    const i2c_master_bus_config_t i2c_mst_config = {
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .i2c_port = 0,
-        .scl_io_num = GPIO_NUM_9,
-        .sda_io_num = GPIO_NUM_8,
+        .scl_io_num = GPIO_SCL_PIN,
+        .sda_io_num = GPIO_SDA_PIN,
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
     };
 
-    ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_mst_config, &sht40.bus_handle));
+    esp_err_t err = i2c_new_master_bus(&i2c_mst_config, &sht40.bus_handle);
+    if(err != ESP_OK) {
+        ESP_LOGE(GATTS_TAG, "Failed to create I2C master bus: %s", esp_err_to_name(err));
+        return;
+    }
 
-    i2c_device_config_t dev_cfg = {
+    const i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = SENSOR_ADDRESS,
         .scl_speed_hz = SENSOR_BUS_COMM_SPEED,
     };
 
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(sht40.bus_handle, &dev_cfg, &sht40.dev_handle));
+    err = i2c_master_bus_add_device(sht40.bus_handle, &dev_cfg, &sht40.dev_handle);
+    if(err != ESP_OK) {
+        ESP_LOGE(GATTS_TAG, "Failed to add a device to I2C bus: %s", esp_err_to_name(err));
+        return;
+    }
 }
 
 void sht_get_data(sensor_data *meas) {
@@ -104,25 +133,56 @@ void sht_get_data(sensor_data *meas) {
     uint8_t command[1] = {SHT40_MEDIUM_ACCURACY_MEASURMENT_COMMAND};
     uint8_t rcv_buff[6] = {0};
 
-    //ESP_ERROR_CHECK(i2c_master_transmit_receive(sht40.dev_handle, command, sizeof(command), rcv_buff, sizeof(rcv_buff), -1));
-    ESP_ERROR_CHECK(i2c_master_transmit(sht40.dev_handle, command, sizeof(command), -1));
-    command[0] = 1;
-    esp_rom_delay_us(10*1000);
-    ESP_ERROR_CHECK(i2c_master_receive(sht40.dev_handle, rcv_buff, sizeof(rcv_buff), -1));
-    
-    uint16_t raw_temp = (rcv_buff[0] << 8) + rcv_buff[1];
-    uint16_t raw_humi = (rcv_buff[3] << 8) + rcv_buff[4];
+    esp_err_t err = i2c_master_transmit(sht40.dev_handle, command, sizeof(command), pdMS_TO_TICKS(I2C_TIMEOUT));
+    if(err != ESP_OK) {
+        ESP_LOGE(GATTS_TAG, "Failed to transmit to I2C bus: %s", esp_err_to_name(err));
+        return;
+    }
 
+    // Wait 10ms for the sht40 to do its measurment
+    esp_rom_delay_us(10*1000);
+
+
+    err = i2c_master_receive(sht40.dev_handle, rcv_buff, sizeof(rcv_buff), pdMS_TO_TICKS(I2C_TIMEOUT));
+    if(err != ESP_OK) {
+        ESP_LOGE(GATTS_TAG, "Failed to receive from I2C bus: %s", esp_err_to_name(err));
+        return;
+    }
+
+    
+    // Check CRC for temperature data
+    if (sht_crc8(rcv_buff, 2) != rcv_buff[2]) {
+        ESP_LOGW(GATTS_TAG, "Temperature data CRC mismatch!");
+    }
+
+    // Check CRC for humidity data
+    if (sht_crc8(rcv_buff + 3, 2) != rcv_buff[5]) {
+        ESP_LOGW(GATTS_TAG, "Humidity data CRC mismatch!");
+    }
+    
+    // Byte swap 
+    uint16_t raw_temp = (rcv_buff[0] << 8) | rcv_buff[1];
+    uint16_t raw_humi = (rcv_buff[3] << 8) | rcv_buff[4];
+
+    // Conversion from ticks to value from the datasheet
     meas->temperature = -45 + 175.0f * raw_temp / 65535;
     meas->humidity = -6 + 125.0f * raw_humi / 65535;
 
+    // Humidity can exceed the normal values so we clamp them (said in the datasheet)
     if(meas->humidity > 100) meas->humidity = 100;
     else if (meas->humidity < 0) meas->humidity = 0;
 }
 
 void sht_destroy() {
-    ESP_ERROR_CHECK(i2c_master_bus_rm_device(sht40.dev_handle));
-    ESP_ERROR_CHECK(i2c_del_master_bus(sht40.bus_handle));
+    esp_err_t err = i2c_master_bus_rm_device(sht40.dev_handle);
+    if(err != ESP_OK) {
+        ESP_LOGE(GATTS_TAG, "Failed to remove a device from I2C bus: %s", esp_err_to_name(err));
+    }
+
+    err = i2c_del_master_bus(sht40.bus_handle);
+    if(err != ESP_OK) {
+        ESP_LOGE(GATTS_TAG, "Failed to delete I2C master bus: %s", esp_err_to_name(err));
+    }
 }
 
 static uint8_t adv_service_uuid128[32] = {
@@ -261,7 +321,7 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.uuid.len = ESP_UUID_LEN_16;
         gl_profile_tab[PROFILE_A_APP_ID].service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID;
 
-        esp_err_t set_dev_name_ret = esp_ble_gap_set_device_name(test_device_name);
+        esp_err_t set_dev_name_ret = esp_ble_gap_set_device_name(device_name);
         if (set_dev_name_ret){
             ESP_LOGE(GATTS_TAG, "set device name failed, error code = %x", set_dev_name_ret);
         }
@@ -306,11 +366,11 @@ static void gatts_profile_a_event_handler(esp_gatts_cb_event_t event, esp_gatt_i
         gl_profile_tab[PROFILE_A_APP_ID].char_uuid.uuid.uuid16 = GATTS_CHAR_UUID;
 
         esp_ble_gatts_start_service(gl_profile_tab[PROFILE_A_APP_ID].service_handle);
-        a_property = ESP_GATT_CHAR_PROP_BIT_READ;
+        sensor_char_properties = ESP_GATT_CHAR_PROP_BIT_READ;
         esp_err_t add_char_ret = esp_ble_gatts_add_char(gl_profile_tab[PROFILE_A_APP_ID].service_handle, &gl_profile_tab[PROFILE_A_APP_ID].char_uuid,
                                                         ESP_GATT_PERM_READ,
-                                                        a_property,
-                                                        &gatts_demo_char1_val, NULL);
+                                                        sensor_char_properties,
+                                                        &gatts_char1_default, NULL);
         if (add_char_ret){
             ESP_LOGE(GATTS_TAG, "add char failed, error code =%x",add_char_ret);
         }
@@ -422,9 +482,8 @@ void app_main(void)
     // Gets mac address and uses the 3 last bytes to get a sort of unique identifier
     unsigned char mac_base[6] = {0};
     esp_efuse_mac_get_default(mac_base);
-    sprintf(test_device_name, "ESP_VC_TEMP_%X%X%X", mac_base[3], mac_base[4], mac_base[5]);
+    snprintf(device_name, ESP_BLE_ADV_NAME_LEN_MAX, "VC_SENS_%X%X%X", mac_base[3], mac_base[4], mac_base[5]);
 
-    // esp_wifi_stop();
     sht_configure();
 
 //////////////// Sensor test code ////////////////////
