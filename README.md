@@ -59,7 +59,7 @@ BAT+             -> ESP32 BAT+
 
 # Tips
 
-- You can soften the switch whole with a heat gun or a hot air station before inserting it
+- You can soften the switch hole with a heat gun or a hot air station before inserting it
 - The battery is taped to the back with a piece of nano tape
 - The battery connector on the ESP32 can be desoldered to solder the wires through the vias
 - The rest is soldered on headers and covered with heat shrink tube
