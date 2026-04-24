@@ -46,7 +46,20 @@ idf.py flash monitor
 
 <br></br>
 
-# TODO
+# Pinout
 
-- Potential fan before measure
-- Case
+ESP32 GPIO_NUM_8 -> SHT40 SDA  
+ESP32 GPIO_NUM_9 -> SHT40 SCL  
+ESP32 GND        -> SHT40 GND  
+ESP32 3.3V       -> SHT40 VCC  
+
+ESP32 BAT-       -> Switch side 1  
+Switch side 2    -> BAT-  
+BAT+             -> ESP32 BAT+  
+
+# Tips
+
+- You can soften the switch whole with a heat gun or a hot air station before inserting it
+- The battery is taped to the back with a piece of nano tape
+- The battery connector on the ESP32 can be desoldered to solder the wires through the vias
+- The rest is soldered on headers and covered with heat shrink tube
