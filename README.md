@@ -57,6 +57,48 @@ ESP32 BAT-       -> Switch side 1
 Switch side 2    -> BAT-  
 BAT+             -> ESP32 BAT+  
 
+# Diagram
+
+```mermaid
+flowchart LR
+    subgraph ESP32 [ESP32 Board]
+        P8(GPIO_NUM_8)
+        P9(GPIO_NUM_9)
+        GND(GND)
+        V33(3.3V)
+        EBAT_P(BAT+)
+        EBAT_M(BAT-)
+    end
+
+    subgraph SHT40 [SHT40 DFRobot Module]
+        SDA(SDA)
+        SCL(SCL)
+        SGND(GND)
+        SVCC(VCC)
+    end
+
+    subgraph Power [1800mAh LiPo Battery]
+        BP(BAT+)
+        BM(BAT-)
+    end
+
+    subgraph Switch [SPST Switch]
+        S1(Side 1)
+        S2(Side 2)
+    end
+
+    %% I2C Connections
+    P8 <-->|I2C Data| SDA
+    P9 --->|I2C Clock| SCL
+    GND --- SGND
+    V33 ---> SVCC
+
+    %% Power Connections
+    BP ---> EBAT_P
+    BM --- S2
+    S1 --- EBAT_M
+```
+
 # Tips
 
 - You can soften the switch hole with a heat gun or a hot air station before inserting it
