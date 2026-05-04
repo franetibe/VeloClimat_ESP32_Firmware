@@ -108,7 +108,7 @@ idf.py flash monitor
 
 # Step 4: Test the communication between the app and the hardware
 
--> Rewrite this part ?
+-> TODO Rewrite this part ?
 
 - Set the target for your esp32 model (example `idf.py set_target esp32-c3`)
 - Make sure you have the flash size of your particular esp32 set right (`idf.py menuconfig`)
@@ -117,7 +117,7 @@ idf.py flash monitor
 
 # Step 5: Place the hardware inside the shield
 
--> Rewrite this part and add pictures ?
+-> TODO Rewrite this part and add pictures ?
 
 - You can soften the switch hole with a heat gun or a hot air station before inserting it
 - The battery is taped to the back with a piece of nano tape
