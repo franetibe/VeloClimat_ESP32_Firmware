@@ -115,7 +115,7 @@ idf.py flash monitor
 - Make sure you have the I2C pins set right `GPIO_SDA_PIN` and  `GPIO_SCL_PIN` defines in the gatts_server.c
 - You can choose the accuracy level you want by changing the line `uint8_t command[1] = {SHT40_MEDIUM_ACCURACY_MEASURMENT_COMMAND};` in `sht_get_data`
 
-# Step 5: Place the hardware inside the shield
+# Step 5: Mount the shield and place the hardware inside the shield
 
 -> TODO Rewrite this part and add pictures ?
 
